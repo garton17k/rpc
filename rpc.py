@@ -2,44 +2,42 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# ✅ Define ETH and USDT balances per wallet
-WALLET_DATA = {
-    "0x2500fa4b7214E0F1EB536bbF0b17865fd25d31D1".lower(): {
-        "eth_balance": "0x2386f26fc10000",  # 0.01 ETH = ~$10
-        "usdt_balance": "0x0de0b6b3a76400000000"  # 1,000,000 USDT (18 decimals)
+# Example wallet address and balances
+wallet_balances = {
+    "0x2500fa4b7214E0F1EB536bbF0b17865fd25d31D1": {
+        "eth": "0x8ac7230489e80000",   # 10 ETH in wei (for example)
+        "usdt": "0xde0b6b3a76400000"  # 1 million USDT in smallest unit
     }
 }
 
 @app.route("/", methods=["POST"])
-def handle_rpc():
+def rpc():
     data = request.get_json()
     method = data.get("method")
     req_id = data.get("id")
-    params = data.get("params", [])
+    params = data.get("params")
 
-    # eth_chainId
+    # Always return chain id 1337 (0x539)
     if method == "eth_chainId":
-        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": "0x539"})  # Chain ID 1337
+        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": "0x539"})
 
-    # eth_getBalance
+    # Return ETH balance for the requested address
     if method == "eth_getBalance":
         address = params[0].lower()
-        result = WALLET_DATA.get(address, {}).get("eth_balance", "0x0")
-        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": result})
+        balance = wallet_balances.get(address, {}).get("eth", "0x0")
+        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": balance})
 
-    # eth_call for ERC20 balanceOf
+    # Simulate eth_call for USDT balanceOf method
     if method == "eth_call":
-        if params and params[0].get("data", "").startswith("0x70a08231"):
-            # Get wallet address from the encoded data
-            data_hex = params[0]["data"]
-            wallet_hex = "0x" + data_hex[-40:]
-            wallet_address = wallet_hex.lower()
+        call_data = params[0].get("data", "")
+        if call_data.startswith("0x70a08231"):  # balanceOf method
+            address = params[0].get("to", "").lower()
+            # For demo, return USDT balance of first wallet or 0
+            usdt_balance = wallet_balances.get(address, {}).get("usdt", "0x0")
+            return jsonify({"jsonrpc": "2.0", "id": req_id, "result": usdt_balance})
+        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": "0x0"})
 
-            result = WALLET_DATA.get(wallet_address, {}).get("usdt_balance", "0x0")
-            return jsonify({"jsonrpc": "2.0", "id": req_id, "result": result})
-        return jsonify({"jsonrpc": "2.0", "id": req_id, "result": "0x"})
-
-    # eth_sendRawTransaction — return error
+    # Simulate error on sending transactions
     if method == "eth_sendRawTransaction":
         return jsonify({
             "jsonrpc": "2.0",
@@ -50,9 +48,8 @@ def handle_rpc():
             }
         })
 
-    # Default fallback
+    # Default null result
     return jsonify({"jsonrpc": "2.0", "id": req_id, "result": None})
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
